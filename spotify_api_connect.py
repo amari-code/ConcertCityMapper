@@ -17,16 +17,8 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=SPOTIPY_CLIENT_ID,
 while True:
     results = sp.current_user_followed_artists(limit=50, after=last_id)
     for artist in results['artists']['items']:
-        #print(artist['name'])
         artist_list.append(artist['name'])
         last_id = artist['id']
         count += 1
-    if results['artists']['next'] == None:
+    if results['artists']['next'] is None:
         break
-
-
-# results = sp.current_user_followed_artists(limit=50, after='7yxi31szvlbwvKq9dYOmFI')
-# print(results)
-
-# text = json.dumps(results, sort_keys=True, indent=4)
-# print(text)
