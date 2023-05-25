@@ -1,3 +1,3 @@
 client_id = ""
 client_secret = ""
-setlistapikeyv = ""
+setlist_api_key = ""

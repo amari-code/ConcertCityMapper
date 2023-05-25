@@ -1,38 +1,42 @@
-import pandas as pd
-import tkinter as tk
+#!/usr/bin/env python3
+
 from tkinter.filedialog import askopenfilename
 from tkinter import messagebox
-import os
-import mapper_lib as mp
-import secret_id
 from datetime import datetime
+import os
+import secret_id  # file where APIs keys are stored
+import pandas as pd
+import tkinter as tk
+import mapper_lib as mp
 
-current_timestamp = datetime.now().strftime("%H%M%S%d%m%y")
 
-ccm = mp.Mapper(secret_id.client_id, secret_id.client_secret, secret_id.setlistapikeyv)
-root = tk.Tk()
-root.withdraw()
-msg_box = tk.messagebox.askquestion('Execution Options', 'Open existing file?')
+if __name__ == "__main__":
 
-if msg_box == 'yes':
-    filename = askopenfilename(initialdir=os.getcwd()+'/final/')
-    print(filename)
-    data = pd.read_csv(filename)
-    print(data)
-    root.destroy()
-else:
-    root.destroy()
-    ccm.spotify_query()
-    ccm.artist_query()
-    ccm.country_zone_finder()
-    data = ccm.art_arr
+    current_timestamp = datetime.now().strftime("%H%M%S%d%m%y")
+    ccm = mp.Mapper(secret_id.client_id, secret_id.client_secret, secret_id.setlist_api_key)
+    root = tk.Tk()
+    root.withdraw()
+    msg_box = tk.messagebox.askquestion('Execution Options', 'Open existing file?')
 
-    try:
-        os.mkdir(os.getcwd()+'/final')
-    except FileExistsError:
-        pass
+    # routine if existing file is opened
+    if msg_box == 'yes':
+        filename = askopenfilename(initialdir=os.getcwd()+'/final/')
+        print(filename)
+        data = pd.read_csv(filename)
+        print(data)
+        root.destroy()
+    else:  # routine if data have to be gathered from APIs
+        root.destroy()
+        ccm.spotify_query()
+        ccm.artist_query()
+        ccm.country_zone_finder()
+        data = ccm.artist_list_from_setlist
 
-    data.to_csv(os.getcwd()+"/final/list_final_"+current_timestamp+".csv")
+        try:
+            os.mkdir(os.getcwd()+'/final')
+        except FileExistsError:
+            pass
 
-ccm.plot_filt(data)
+        data.to_csv(os.getcwd()+"/final/list_final_"+current_timestamp+".csv")
 
+    ccm.plot_filter(data)
