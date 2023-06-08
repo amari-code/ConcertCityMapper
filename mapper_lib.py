@@ -7,6 +7,8 @@ import os
 import spotipy
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sb
+from pylab import rcParams
 
 __author__ = "Antonio Mariano"
 __copyright__ = "Copyright 2023, ConcertCityMapper"
@@ -168,8 +170,10 @@ class Mapper:
         eu_cities['date'] = pd.to_datetime(eu_cities['date'], format='%d-%m-%Y')
         eu_cities_2 = eu_cities[eu_cities["date"] > '01-01-2020']
         eu_cities_count = eu_cities_2['city_name'].value_counts()
-        eu_filter = eu_cities_count[eu_cities_count > min_occ].sort_values()
-        eu_filter.plot.barh()
+        eu_filter = eu_cities_count[eu_cities_count > min_occ].sort_values(ascending=False)
+        eu_filter.reset_index()
+        pal = sb.dark_palette('red', len(eu_filter), reverse=True)
+        sb.barplot(x=eu_filter.values, y=eu_filter.index, orient='h', palette=pal)
         for a in range(len(eu_filter)):
             plt.text(eu_filter[a] / 2, a, eu_filter[a], color='white')
         plt.title("Concerts distribution by favourite bands")

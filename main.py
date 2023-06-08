@@ -21,14 +21,12 @@ if __name__ == "__main__":
     # routine if existing file is opened
     if msg_box == 'yes':
         filename = askopenfilename(initialdir=os.getcwd()+'/final/')
-        print(filename)
         data = pd.read_csv(filename)
-        print(data)
         root.destroy()
     else:  # routine if data have to be gathered from APIs
         root.destroy()
         ccm.spotify_query()
-        ccm.artist_query()
+        ccm.artist_query(lim=30)
         ccm.country_zone_finder()
         data = ccm.artist_list_from_setlist
 
