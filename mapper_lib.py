@@ -8,7 +8,6 @@ import spotipy
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sb
-from pylab import rcParams
 
 __author__ = "Antonio Mariano"
 __copyright__ = "Copyright 2023, ConcertCityMapper"
