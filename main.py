@@ -13,7 +13,7 @@ import mapper_lib as mp
 if __name__ == "__main__":
 
     current_timestamp = datetime.now().strftime("%H%M%S%d%m%y")
-    ccm = mp.Mapper(config("client_id"), config("client_secret"), config("setlist_api_key"))
+    ccm = mp.Mapper()
     root = tk.Tk()
     root.withdraw()
     msg_box = tk.messagebox.askquestion('Execution Options', 'Open existing file?')
@@ -36,4 +36,4 @@ if __name__ == "__main__":
 
         data.to_csv(os.getcwd()+"/final/list_final_"+current_timestamp+".csv")
 
-    ccm.plot_filter(data,min_occ=50, region_filter=['Northern Europe', 'Western Europe', 'Southern Europe'], exclude_countries=['UK', 'Ireland'],year=2020)
+    ccm.plot_filter(data,min_occ=50, region_filter=['Northern Europe', 'Western Europe', 'Southern Europe'],year=2020)

@@ -2,7 +2,6 @@
 
 from spotipy.oauth2 import SpotifyOAuth
 from datetime import datetime
-import requests
 import os
 import spotipy
 import pandas as pd
@@ -10,18 +9,13 @@ import matplotlib.pyplot as plt
 import seaborn as sb
 from decouple import config
 import json
-import pprint
 
 from bs4 import BeautifulSoup
 import urllib.request
 import ssl
 import re
-from unidecode import unidecode
 
-import cufflinks as cf
-import chart_studio.plotly as py
-import chart_studio.tools as tls
-import plotly.graph_objs as go
+
 
 __author__ = "Antonio Mariano"
 __copyright__ = "Copyright 2023, ConcertCityMapper"
@@ -30,24 +24,17 @@ __version__ = "0.1.0"
 __email__ = "a_mariano@live.it"
 __status__ = "Prototype"
 
-tls.set_credentials_file(username=config('plotly_username'), api_key=config('plotly_api_key'))
-pd.options.plotting.backend = "plotly"
+
 flags = re.IGNORECASE | re.MULTILINE
+
 class Mapper:
 
-    def __init__(self, spotify_client_id, spotify_client_secret, setlist_api_key):
+    def __init__(self):
 
         self.artist_list_from_spotify = []
         self.artist_list_from_songkick = pd.DataFrame()
-        self.SPOTIPY_CLIENT_ID = spotify_client_id
-        self.SPOTIPY_CLIENT_SECRET = spotify_client_secret
-        self.setlist_api_key = setlist_api_key
-        # list of country to filter data
-        self.list_of_interest = ["Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Czech Republic", "Denmark",
-                                 "Estonia", "Finland", "France", "Germany", "Greece", "Hungary", "Ireland", "Italy",
-                                 "Latvia", "Lithuania", "Luxembourg", "Malta", "The Netherlands", "Poland", "Portugal",
-                                 "Romania", "Slovakia", "Slovenia", "Spain", "Sweden", "Switzerland", "Netherlands",
-                                 "Czechia"]
+        self.SPOTIPY_CLIENT_ID = config("client_id")
+        self.SPOTIPY_CLIENT_SECRET = config("client_secret")
 
         pd.set_option('display.max_columns', None)
         self.region_dataframe = pd.read_json('all.json')
@@ -200,33 +187,33 @@ class Mapper:
 
     # format and filter the dataframe before plotting
     @staticmethod
-    def plot_filter(df, min_occ=10, year=datetime.now().year, region_filter=[], exclude_countries=[]):
-
-        if region_filter:
-            df1= pd.DataFrame()
+    def plot_filter(df, min_occ=10, year=datetime.now().year, region_filter=None, exclude_countries=None):
+        my_dpi = 96
+        if region_filter is not None:
+            df1 = pd.DataFrame()
             for region in region_filter:
-                df1 = df1._append(df[(df['region'] == region) | (df['sub_region'] == region)])
+                print(region)
+                df1 = pd.concat([df1, (df[(df['region'] == region) | (df['sub_region'] == region)])], ignore_index=True)
             df = df1
-
-        if exclude_countries:
-
-            i=0
+        df.to_csv("temp_list/list_temp1.csv")
+        if exclude_countries is not None:
             for country in exclude_countries:
                 df = (df[~(df['country'] == country)])
-                i += 1
 
+        df.to_csv("temp_list/list_temp2.csv")
         df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
         df = df[df["date"] > f'{year}-01-01']
         cities_count = df['city_name'].value_counts()
         print(cities_count)
         final = cities_count[cities_count > min_occ].sort_values(ascending=False)
         pal = sb.dark_palette('red', len(final), reverse=True)
+        sb.set(rc={'figure.figsize': (1920 / my_dpi, 1080 / my_dpi)})
         sb.barplot(x=final.values, y=final.index, orient='h', palette=pal)
         for a in range(len(final)):
             plt.text(final[a] / 2, a, final[a], color='white')
         plt.title("Concerts distribution by favourite bands")
         plt.xlabel("Number of concerts")
         plt.ylabel("Cities")
+        plt.savefig(f'city_dist{datetime.now()}.png', dpi=my_dpi)
         plt.show()
-        plt.savefig('city_dist.png')
         plt.close('all')
