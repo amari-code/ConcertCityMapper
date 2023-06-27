@@ -8,6 +8,20 @@ import spotipy
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sb
+from decouple import config
+import json
+import pprint
+
+from bs4 import BeautifulSoup
+import urllib.request
+import ssl
+import re
+from unidecode import unidecode
+
+import cufflinks as cf
+import chart_studio.plotly as py
+import chart_studio.tools as tls
+import plotly.graph_objs as go
 
 __author__ = "Antonio Mariano"
 __copyright__ = "Copyright 2023, ConcertCityMapper"
@@ -16,13 +30,15 @@ __version__ = "0.1.0"
 __email__ = "a_mariano@live.it"
 __status__ = "Prototype"
 
-
+tls.set_credentials_file(username=config('plotly_username'), api_key=config('plotly_api_key'))
+pd.options.plotting.backend = "plotly"
+flags = re.IGNORECASE | re.MULTILINE
 class Mapper:
 
     def __init__(self, spotify_client_id, spotify_client_secret, setlist_api_key):
 
         self.artist_list_from_spotify = []
-        self.artist_list_from_setlist = pd.DataFrame()
+        self.artist_list_from_songkick = pd.DataFrame()
         self.SPOTIPY_CLIENT_ID = spotify_client_id
         self.SPOTIPY_CLIENT_SECRET = spotify_client_secret
         self.setlist_api_key = setlist_api_key
@@ -33,27 +49,24 @@ class Mapper:
                                  "Romania", "Slovakia", "Slovenia", "Spain", "Sweden", "Switzerland", "Netherlands",
                                  "Czechia"]
 
-    # retrieve artist setlists data from setlist.fm APIs
-    def artist_query(self, lim=-1):
+        pd.set_option('display.max_columns', None)
+        self.region_dataframe = pd.read_json('all.json')
+
+
+    # scrape concert data from songkick
+    def songkick_data_scraping(self, lim=-1, start_year=datetime.now().year):
         current_timestamp = datetime.now().strftime("%H%M%S%d%m%y")
-        temp_dict = {}
         count = 1
         len_art = len(self.artist_list_from_spotify)
         city_name = []
-        city_lat = []
-        city_long = []
         event_date = []
         artist_name = []
         country = []
+        event_venue = []
+        region = []
+        sub_region = []
 
-        headers_setlist = {
-            "x-api-key": self.setlist_api_key,
-            "Accept": 'application/json'
-        }
-
-        headers_musicbrainz = {
-            "Accept": 'application/json',
-        }
+        context = ssl._create_unverified_context()
 
         if lim == -1:
             end = len_art
@@ -61,72 +74,107 @@ class Mapper:
             end = lim
 
         for artist in self.artist_list_from_spotify[:end]:
-            print(str(count) + "/" + str(end) + " " + artist)
-            # retrieve the artist musicbrainz id required by setlist.fm (to avoid mistake when artists have same names)
-            response_music_brainz = requests.get(" https://musicbrainz.org/ws/2/artist/?query=" + artist,
-                                                 headers=headers_musicbrainz)
 
-            res = (response_music_brainz.json())
+            print(f'{artist} : {count} of {end}')
+            artist_to_query = artist.lower()
+            url = f'https://www.songkick.com/search?page=1&per_page=10&query={urllib.parse.quote(artist_to_query)}&type=artists'
+            artist_query = urllib.request.urlopen(url, context=context).read()
+            soup = BeautifulSoup(artist_query, 'html.parser')
+
+            actual_artist_list = soup.findAll('p', attrs={'class' : 'summary'})
+            gigography_url = ''
+            for actual_artist in actual_artist_list:
+                if actual_artist.strong.string.lower().replace("'", " ") == artist_to_query:
+
+                    actual_artist_url = actual_artist.a['href']
+                    gigography_url = f'https://www.songkick.com{actual_artist_url}/gigography'
+                    print(gigography_url)
+
+                    break
+                else:
+                    continue
 
             try:
-                music_brainz_id = res['artists'][0]['id']  # musicbrainz id
-            except KeyError as e:
-                print(str(e) + " not available")
-                continue
-            # retrieve first page of artist setlists. More can be retrieved and added to response_setlist_list
-            response_setlist_p1 = requests.get("https://api.setlist.fm/rest/1.0/artist/" + music_brainz_id + 
-                                               "/setlists?p=1",
-                                               headers=headers_setlist
-                                               )
-            
-            # this is left as a list in case more pages from the APIs are retrieved
-            response_setlist_list = [response_setlist_p1]  
-            try:
-                for response_setlist in response_setlist_list:
+                while len(gigography_url) > 0:
 
-                    for line in response_setlist.json()['setlist']:
+                    gigs = urllib.request.urlopen(gigography_url, context=context).read()
+                    gigography_event_listing = BeautifulSoup(gigs, 'html.parser')
+                    try:
+                        gigography_list = gigography_event_listing.findAll('ul', attrs={'class': re.compile("event-listings")})[0]
+                    except IndexError:
+                        raise StopIteration
+
+                    gig_list = gigography_list.findAll('script', attrs={'type': 'application/ld+json'})
+
+                    for gig in gig_list:
+
+                        location_infos = json.loads(gig.string)[0]
+
                         try:
-                            temp_dict = {
-                                "artist": artist,
-                                "event_date": line['eventDate'],
-                                "name": str(line['venue']['city']['name']),
-                                "long": line['venue']['city']['coords']['long'],
-                                "lat": line['venue']['city']['coords']['lat'],
-                                "country": line['venue']['city']['country']['name'],
+                            concert_date = location_infos['endDate']
+                            concert_venue = location_infos['location']['name']
+                            concert_city = location_infos['location']['address']['addressLocality']
+                            concert_country = location_infos['location']['address']['addressCountry']
 
-                            }
+                        except AttributeError as ae:
+                            # print(gig_infos)
+                            print(ae)
+                            continue
                         except KeyError as ke:
-                            print(str(ke) + " not available")
-                            temp_dict[ke] = None
+                            print(location_infos['location'])
+                            print(ke)
                             continue
 
-                        artist_name.append(temp_dict["artist"])
-                        city_name.append(temp_dict["name"])
-                        city_lat.append(temp_dict["lat"])
-                        city_long.append(temp_dict["long"])
-                        event_date.append(temp_dict["event_date"])
-                        country.append(temp_dict["country"])
-            except KeyError as e:
-                print(str(e) + " not available")
-                continue
+                        country_regions = self.region_dataframe[
+                            (self.region_dataframe['name'].str.match(fr'.*\b{concert_country}\b.*',
+                                                                     flags=flags)) |
+                            (self.region_dataframe['alpha-2'].str.match(fr'.*\b{concert_country}\b.*',
+                                                                        flags=flags))]
 
-            self.artist_list_from_setlist = pd.DataFrame(
-                {
-                    "artist": artist_name,
-                    "date": event_date,
-                    "city_name": city_name,
-                    "city_long": city_lat,
-                    "city_lat": city_long,
-                    "country": country,
-                }
-            )
-            count += 1
-            try:
-                os.mkdir(os.getcwd() + '/temp_list')
-            except FileExistsError:
+                        country_region = country_regions['region'].values[0]
+                        country_sub_region = country_regions['sub-region'].values[0]
+
+                        if datetime.strptime(concert_date, '%Y-%m-%d').year < start_year:
+                            raise StopIteration
+
+                        artist_name.append(artist)
+                        event_date.append(concert_date)
+                        event_venue.append(concert_venue)
+                        city_name.append(concert_city)
+                        country.append(concert_country)
+                        region.append(country_region)
+                        sub_region.append(country_sub_region)
+
+                    try:
+
+                        gigography_next_url = gigography_event_listing.findAll('a', attrs={'rel': re.compile("next")})[0]['href']
+                        gigography_url = f'https://www.songkick.com{gigography_next_url}'
+                    except IndexError as e:
+                        print(e)
+                        gigography_url = ''
+            except StopIteration:
                 pass
-            # temporary backup csv file to avoid losing data if the connection to setlist fall
-            self.artist_list_from_setlist.to_csv("temp_list/list" + current_timestamp + ".csv")
+
+            count += 1
+
+        self.artist_list_from_songkick = pd.DataFrame(
+            {
+                "artist": artist_name,
+                "date": event_date,
+                "event_venue": event_venue,
+                "city_name": city_name,
+                "country": country,
+                "region": region,
+                "sub_region": sub_region,
+            }
+        )
+
+        try:
+            os.mkdir(os.getcwd() + '/temp_list')
+        except FileExistsError:
+            pass
+        # temporary backup csv file to avoid losing data if the connection to setlist fall
+        self.artist_list_from_songkick.to_csv("temp_list/list" + current_timestamp + ".csv")
 
     # retrieve favourite artists from Spotify APIs
     def spotify_query(self):
@@ -150,33 +198,35 @@ class Mapper:
             if results['artists']['next'] is None:
                 break
 
-    # routine that flag the country if they're in list_of_interest
-    def country_zone_finder(self):
-        aoi = []
-        for country in self.artist_list_from_setlist['country']:
-
-            if country in self.list_of_interest:
-                aoi.append(1)
-            else:
-                aoi.append(0)
-
-        self.artist_list_from_setlist['aoi'] = aoi
-
     # format and filter the dataframe before plotting
     @staticmethod
-    def plot_filter(df, min_occ=5):
-        eu_cities = df[df["aoi"] == 1]
-        eu_cities['date'] = pd.to_datetime(eu_cities['date'], format='%d-%m-%Y')
-        eu_cities_2 = eu_cities[eu_cities["date"] > '01-01-2020']
-        eu_cities_count = eu_cities_2['city_name'].value_counts()
-        eu_filter = eu_cities_count[eu_cities_count > min_occ].sort_values(ascending=False)
-        eu_filter.reset_index()
-        pal = sb.dark_palette('red', len(eu_filter), reverse=True)
-        sb.barplot(x=eu_filter.values, y=eu_filter.index, orient='h', palette=pal)
-        for a in range(len(eu_filter)):
-            plt.text(eu_filter[a] / 2, a, eu_filter[a], color='white')
+    def plot_filter(df, min_occ=10, year=datetime.now().year, region_filter=[], exclude_countries=[]):
+
+        if region_filter:
+            df1= pd.DataFrame()
+            for region in region_filter:
+                df1 = df1._append(df[(df['region'] == region) | (df['sub_region'] == region)])
+            df = df1
+
+        if exclude_countries:
+
+            i=0
+            for country in exclude_countries:
+                df = (df[~(df['country'] == country)])
+                i += 1
+
+        df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
+        df = df[df["date"] > f'{year}-01-01']
+        cities_count = df['city_name'].value_counts()
+        print(cities_count)
+        final = cities_count[cities_count > min_occ].sort_values(ascending=False)
+        pal = sb.dark_palette('red', len(final), reverse=True)
+        sb.barplot(x=final.values, y=final.index, orient='h', palette=pal)
+        for a in range(len(final)):
+            plt.text(final[a] / 2, a, final[a], color='white')
         plt.title("Concerts distribution by favourite bands")
         plt.xlabel("Number of concerts")
         plt.ylabel("Cities")
         plt.show()
+        plt.savefig('city_dist.png')
         plt.close('all')

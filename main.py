@@ -26,9 +26,8 @@ if __name__ == "__main__":
     else:  # routine if data have to be gathered from APIs
         root.destroy()
         ccm.spotify_query()
-        ccm.artist_query()
-        ccm.country_zone_finder()
-        data = ccm.artist_list_from_setlist
+        ccm.songkick_data_scraping(start_year=2020)
+        data = ccm.artist_list_from_songkick
 
         try:
             os.mkdir(os.getcwd()+'/final')
@@ -37,4 +36,4 @@ if __name__ == "__main__":
 
         data.to_csv(os.getcwd()+"/final/list_final_"+current_timestamp+".csv")
 
-    ccm.plot_filter(data)
+    ccm.plot_filter(data,min_occ=50, region_filter=['Northern Europe', 'Western Europe', 'Southern Europe'], exclude_countries=['UK', 'Ireland'],year=2020)
